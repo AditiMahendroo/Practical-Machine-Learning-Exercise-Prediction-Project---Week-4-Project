@@ -1,0 +1,115 @@
+---
+title: "Practical Machine Learning_Week 4 Project"
+author: "Aditi Mahendroo"
+date: "3/23/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Project Overview 
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+## Project Goal
+
+The goal of this project will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+## Load the Required Pacakges
+
+```{r packages}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+```
+
+##Load the Training and Test Sets 
+```{r}
+setwd("~/Documents/Coursera/Working Directory/Practical Machine Learning")
+
+data.train <- read.csv("~/Documents/Coursera/Working Directory/Practical Machine Learning/pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+
+data.test <- read.csv("~/Documents/Coursera/Working Directory/Practical Machine Learning/pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+## View the Training Data
+```{r}
+View(data.train)
+dim(data.train)
+```
+
+## View the Testing Data
+```{r}
+View(data.test)
+dim(data.test)
+```
+
+There are 19,622 observations and 160 variables in the training data set while there are 20 observations and 160 variables in the testing data set. The “classe” variable in the training set is the outcome that we care about.
+
+## Clean the Data 
+### It's best to clean the data before splitting it up to keep it proportional from the datasets. First, remove the columns with the NA missing values 
+```{r}
+trainRaw <- data.train[, colSums(is.na(data.train)) == 0] 
+testRaw <- data.test[, colSums(is.na(data.test)) == 0] 
+remove_nearzerovalues <- nearZeroVar(trainRaw)
+
+classe <- trainRaw$classe
+trainRemove <- grepl("^X|timestamp|window", names(trainRaw))
+trainRaw <- trainRaw[, !trainRemove]
+trainCleaned <- trainRaw[, sapply(trainRaw, is.numeric)]
+trainCleaned$classe <- classe
+
+testRemove <- grepl("^X|timestamp|window", names(testRaw))
+testRaw <- testRaw[, !testRemove]
+testCleaned <- testRaw[, sapply(testRaw, is.numeric)]
+```
+
+## Partition the Training Data to Create a Third Dataset
+```{r}
+inTrain <- createDataPartition(trainRaw$classe, p=0.6, list=FALSE)
+inTrain <- createDataPartition(trainCleaned$classe, p=0.6, list=FALSE)
+myTraining <- trainCleaned[inTrain, ]
+myTesting <- trainCleaned[-inTrain, ]
+dim(myTraining) 
+dim(myTesting)
+```
+
+## Predict an outcome, using Random Forest
+We will use Random Forest as our predictive model because it automatically selects important variables. We will use 5-fold cross validation when we run the algorithm. The first step generates a model based on the training data. 
+```{r}
+set.seed(5228)
+control_RandForest <- trainControl(method="cv", number=5, verboseIter=FALSE)
+model_FitRandForest <- train(classe ~ ., data = myTraining, method = "rf",
+                          trControl=control_RandForest, ntree=250)
+model_FitRandForest$finalModel
+```
+
+Now we will apply that model to the test data, then measure sample error and accuracy. 
+```{r}
+predict_RandForest <- predict(model_FitRandForest, newdata=myTesting)
+confusion_MatRandForest <- confusionMatrix(predict_RandForest, myTesting$classe)
+confusion_MatRandForest
+```
+## Correlation Matrix Visualization
+
+```{r}
+myTraining <- myTraining[, sapply(myTraining, is.numeric)]
+myTesting <- myTesting[, sapply(myTesting, is.numeric)]
+corr_Plot <- cor(myTraining[, -length(names(myTraining))])
+corrplot(corr_Plot, method="shade", tl.cex=0.6, tl.srt = 45, tl.col = "black")
+```
+
+```{r}
+Result <- predict(model_FitRandForest, testRaw)
+
+Result
+```
